@@ -1,3 +1,4 @@
+import streamlit as st
 import csv
 import pandas as pd
 import chromadb
@@ -123,20 +124,11 @@ def generate_csv():
         },
     ]
 
-    with open(r"D:\Hp\Documents\Belajar RAG\RAG-Projects\simple_rag\space_facts.csv", mode="w", newline="") as file:
+    with open("RAG-Projects/simple_rag/space_facts.csv", mode="w", newline="") as file:
         writer = csv.DictWriter(file, fieldnames=["id", "fact"])
         writer.writeheader()
         writer.writerows(facts)
-
-    print("CSV file 'space_facts.csv' created successfully!")
-
-def load_csv():
-    df = pd.read_csv(r"RAG-Projects\simple_rag\space_facts.csv")
-    documents = df["fact"].tolist()
-    print("\nLoaded documents:")
-    for doc in documents:
-        print(f"- {doc}")
-    return documents
+    return facts
 
 def setup_chromadb(documents, embedding_model):
     client = chromadb.Client()
@@ -202,47 +194,97 @@ def rag_pipeline(query, collection, llm_model, top_k=2):
     print(response)
 
     references = [chunk[0] for chunk in related_chunks]
-    return response, references
+    return response, references, augmented_prompt
 
-def main():
-    print("Starting the RAG pipeline demo...")
+def streamlit_app():
+    st.set_page_config(page_title="Space Facts RAG", layout="wide")
+    st.title("Space Facts RAG System")
 
-    # Select models
-    llm_type, embedding_type = select_models()
+    # Sidebar for model selection
+    st.sidebar.title("Model Configuration")
 
-    # Initialize models
-    llm_model = LLMModel(llm_type)
-    embedding_model = EmbeddingModel(embedding_type)
+    llm_type = st.sidebar.radio(
+        "Select LLM Model:",
+        ["gemini", "ollama"],
+        format_func=lambda x: "Gemini 3.5 Flash" if x == "gemini" else "Ollama Llama2",
+    )
 
-    print(f"\nUsing LLM: {llm_type.upper()}")
-    print(f"Using Embeddings: {embedding_type.upper()}")
+    embedding_type = st.sidebar.radio(
+        "Select Embedding Model:",
+        ["gemini", "chroma", "nomic"],
+        format_func=lambda x: {
+            "gemini": "Gemini Embeddings",
+            "chroma": "Chroma Default",
+            "nomic": "Nomic Embed Text (Ollama)",
+        }[x],
+    )
 
-    # Generate and load data
-    # generate_csv()
-    documents = load_csv()
+    # Initialize session state
+    if "initialized" not in st.session_state:
+        st.session_state.initialized = False
+        st.session_state.facts = generate_csv()
 
-    # Setup ChromaDB
-    collection = setup_chromadb(documents, embedding_model)
+        # Initialize models
+        st.session_state.llm_model = LLMModel(llm_type)
+        st.session_state.embedding_model = EmbeddingModel(embedding_type)
 
-    # Run queries
-    queries = [
-        "What is the Hubble Space Telescope?",
-        "Tell me about Mars exploration.",
-    ]
+        # Setup ChromaDB
+        documents = [fact["fact"] for fact in st.session_state.facts]
+        st.session_state.collection = setup_chromadb(
+            documents, st.session_state.embedding_model
+        )
+        st.session_state.initialized = True
 
-    for query in queries:
-        print("\n" + "=" * 50)
-        print(f"Processing query: {query}")
-        response, references = rag_pipeline(query, collection, llm_model)
+    # If models changed, reinitialize
+    if (
+        st.session_state.llm_model.model_type != llm_type
+        or st.session_state.embedding_model.model_type != embedding_type
+    ):
+        st.session_state.llm_model = LLMModel(llm_type)
+        st.session_state.embedding_model = EmbeddingModel(embedding_type)
+        documents = [fact["fact"] for fact in st.session_state.facts]
+        st.session_state.collection = setup_chromadb(
+            documents, st.session_state.embedding_model
+        )
 
-        print("\nFinal Results:")
-        print("-" * 30)
-        print("Response:", response)
-        print("\nReferences used:")
-        for ref in references:
-            print(f"- {ref}")
-        print("=" * 50)
+    # Display available facts
+    with st.expander("Available Space Facts", expanded=False):
+        for fact in st.session_state.facts:
+            st.write(f"- {fact['fact']}")
+
+    # Query input
+    query = st.text_input(
+        "Enter your question about space:",
+        placeholder="e.g., What is the Hubble Space Telescope?",
+    )
+
+    if query:
+        with st.spinner("Processing your query..."):
+            response, references, augmented_prompt = rag_pipeline(
+                query, st.session_state.collection, st.session_state.llm_model
+            )
+
+            # Display results in columns
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("### Response")
+                st.write(response)
+
+            with col2:
+                st.markdown("### References Used")
+                for ref in references:
+                    st.write(f"- {ref}")
+
+            # Show technical details in expander
+            with st.expander("Technical Details", expanded=False):
+                st.markdown("#### Augmented Prompt")
+                st.code(augmented_prompt)
+
+                st.markdown("#### Model Configuration")
+                st.write(f"- LLM Model: {llm_type.upper()}")
+                st.write(f"- Embedding Model: {embedding_type.upper()}")
 
 
 if __name__ == "__main__":
-    main()
+    streamlit_app()
