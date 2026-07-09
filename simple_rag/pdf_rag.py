@@ -218,8 +218,8 @@ class SimpleRAGSystem:
             """
 
             if self.llm_model == "gemini":
-                 response = self.client.models.generate_content(
-                    model=self.model_name,
+                 response = self.llm.models.generate_content(
+                    model="gemini-3.5-flash",
                     contents=prompt,
                     config=types.GenerateContentConfig(system_instruction=system_instruction, temperature=0.0),
                 )
