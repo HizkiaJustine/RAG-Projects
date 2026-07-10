@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tambahan styling dasar agar tampilannya rapi */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  background-color: #202123;
+  color: #ECECF1;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
